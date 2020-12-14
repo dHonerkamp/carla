@@ -384,4 +384,6 @@ class GlobalRoutePlanner(object):
                         if closest_index > destination_index:
                             break
 
+        route_trace.append((destination_waypoint, RoadOption.VOID))
+
         return route_trace

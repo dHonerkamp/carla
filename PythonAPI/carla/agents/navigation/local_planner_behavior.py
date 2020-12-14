@@ -54,8 +54,8 @@ class LocalPlanner(object):
         :param agent: agent that regulates the vehicle
         :param vehicle: actor to apply to local planner logic onto
         """
-        self._vehicle = agent.vehicle
-        self._map = agent.vehicle.get_world().get_map()
+        self._vehicle = agent._vehicle
+        self._map = self._vehicle.get_world().get_map()
 
         self._target_speed = None
         self.sampling_radius = None
@@ -66,10 +66,11 @@ class LocalPlanner(object):
         self.target_waypoint = None
         self._vehicle_controller = None
         self._global_plan = None
+        self._final_waypoint = None
         self._pid_controller = None
         self.waypoints_queue = deque(maxlen=20000)  # queue with tuples of (waypoint, RoadOption)
-        self._buffer_size = 5
-        self._waypoint_buffer = deque(maxlen=self._buffer_size)
+        # self._buffer_size = 5
+        # self._waypoint_buffer = deque(maxlen=self._buffer_size)
 
         self._init_controller()  # initializing controller
 
@@ -121,6 +122,7 @@ class LocalPlanner(object):
         self._current_waypoint = self._map.get_waypoint(self._vehicle.get_location())
 
         self._global_plan = False
+        self._final_waypoint = None
 
         self._target_speed = self._vehicle.get_speed_limit()
 
@@ -141,17 +143,11 @@ class LocalPlanner(object):
 
             :param current_plan: list of waypoints in the actual plan
         """
+        if clean:
+            self.waypoints_queue.clear()
         for elem in current_plan:
             self.waypoints_queue.append(elem)
-
-        if clean:
-            self._waypoint_buffer.clear()
-            for _ in range(self._buffer_size):
-                if self.waypoints_queue:
-                    self._waypoint_buffer.append(
-                        self.waypoints_queue.popleft())
-                else:
-                    break
+        self._final_waypoint = self.waypoints_queue[-1][0]
 
         self._global_plan = True
 
@@ -169,9 +165,8 @@ class LocalPlanner(object):
                 wpt, direction = self.waypoints_queue[-1]
                 return wpt, direction
             except IndexError as i:
-                print(i)
-                return None, RoadOption.VOID
-        return None, RoadOption.VOID
+                print(i, "returning self._final_waypoint")
+                return self._final_waypoint, RoadOption.VOID
 
     def run_step(self, target_speed=None, debug=False):
         """
@@ -198,20 +193,11 @@ class LocalPlanner(object):
             control.manual_gear_shift = False
             return control
 
-        # Buffering the waypoints
-        if not self._waypoint_buffer:
-            for i in range(self._buffer_size):
-                if self.waypoints_queue:
-                    self._waypoint_buffer.append(
-                        self.waypoints_queue.popleft())
-                else:
-                    break
-
         # Current vehicle waypoint
         self._current_waypoint = self._map.get_waypoint(self._vehicle.get_location())
 
         # Target waypoint
-        self.target_waypoint, self.target_road_option = self._waypoint_buffer[0]
+        self.target_waypoint, self.target_road_option = self.waypoints_queue[0]
 
         if target_speed > 50:
             args_lat = self.args_lat_hw_dict
@@ -230,13 +216,12 @@ class LocalPlanner(object):
         vehicle_transform = self._vehicle.get_transform()
         max_index = -1
 
-        for i, (waypoint, _) in enumerate(self._waypoint_buffer):
-            if distance_vehicle(
-                    waypoint, vehicle_transform) < self._min_distance:
+        for i, (waypoint, _) in enumerate(self.waypoints_queue):
+            if distance_vehicle(waypoint, vehicle_transform) < self._min_distance:
                 max_index = i
         if max_index >= 0:
             for i in range(max_index + 1):
-                self._waypoint_buffer.popleft()
+                self.waypoints_queue.popleft()
 
         if debug:
             draw_waypoints(self._vehicle.get_world(),

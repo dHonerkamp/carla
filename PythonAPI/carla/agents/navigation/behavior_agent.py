@@ -43,7 +43,7 @@ class BehaviorAgent(Agent):
         """
 
         super(BehaviorAgent, self).__init__(vehicle)
-        self.vehicle = vehicle
+        self._vehicle = vehicle
         self.ignore_traffic_light = ignore_traffic_light
         self._local_planner = LocalPlanner(self)
         self._grp = None
@@ -81,7 +81,7 @@ class BehaviorAgent(Agent):
 
             :param world: carla.world object
         """
-        self.speed = get_speed(self.vehicle)
+        self.speed = get_speed(self._vehicle)
         self.speed_limit = world.player.get_speed_limit()
         self._local_planner.set_speed(self.speed_limit)
         self.direction = self._local_planner.target_road_option
@@ -100,7 +100,7 @@ class BehaviorAgent(Agent):
             self.light_state = "Green"
         else:
             # This method also includes stop signs and intersections.
-            self.light_state = str(self.vehicle.get_traffic_light_state())
+            self.light_state = str(self._vehicle.get_traffic_light_state())
 
     def set_destination(self, start_location, end_location, clean=False):
         """
@@ -146,7 +146,7 @@ class BehaviorAgent(Agent):
         """
         # Setting up global router
         if self._grp is None:
-            wld = self.vehicle.get_world()
+            wld = self._vehicle.get_world()
             dao = GlobalRoutePlannerDAO(
                 wld.get_map(), sampling_resolution=self._sampling_resolution)
             grp = GlobalRoutePlanner(dao)
@@ -172,7 +172,7 @@ class BehaviorAgent(Agent):
             :param waypoint: current waypoint of the agent
         """
 
-        light_id = self.vehicle.get_traffic_light().id if self.vehicle.get_traffic_light() is not None else -1
+        light_id = self._vehicle.get_traffic_light().id if self._vehicle.get_traffic_light() is not None else -1
 
         if self.light_state == "Red":
             if not waypoint.is_junction and (self.light_id_to_ignore != light_id or light_id == -1):
@@ -266,7 +266,7 @@ class BehaviorAgent(Agent):
 
         vehicle_list = self._world.get_actors().filter("*vehicle*")
         def dist(v): return v.get_location().distance(waypoint.transform.location)
-        vehicle_list = [v for v in vehicle_list if dist(v) < 45 and v.id != self.vehicle.id]
+        vehicle_list = [v for v in vehicle_list if dist(v) < 45 and v.id != self._vehicle.id]
 
         if self.direction == RoadOption.CHANGELANELEFT:
             vehicle_state, vehicle, distance = self._bh_is_vehicle_hazard(
@@ -370,7 +370,7 @@ class BehaviorAgent(Agent):
         if self.behavior.overtake_counter > 0:
             self.behavior.overtake_counter -= 1
 
-        ego_vehicle_loc = self.vehicle.get_location()
+        ego_vehicle_loc = self._vehicle.get_location()
         ego_vehicle_wp = self._map.get_waypoint(ego_vehicle_loc)
 
         # 1: Red lights and stops behavior
@@ -388,7 +388,7 @@ class BehaviorAgent(Agent):
             # we use bounding boxes to calculate the actual distance
             distance = w_distance - max(
                 walker.bounding_box.extent.y, walker.bounding_box.extent.x) - max(
-                    self.vehicle.bounding_box.extent.y, self.vehicle.bounding_box.extent.x)
+                    self._vehicle.bounding_box.extent.y, self._vehicle.bounding_box.extent.x)
 
             # Emergency brake if the car is very close.
             if distance < self.behavior.braking_distance:
@@ -403,7 +403,7 @@ class BehaviorAgent(Agent):
             # we use bounding boxes to calculate the actual distance
             distance = distance - max(
                 vehicle.bounding_box.extent.y, vehicle.bounding_box.extent.x) - max(
-                    self.vehicle.bounding_box.extent.y, self.vehicle.bounding_box.extent.x)
+                    self._vehicle.bounding_box.extent.y, self._vehicle.bounding_box.extent.x)
 
             # Emergency brake if the car is very close.
             if distance < self.behavior.braking_distance:
